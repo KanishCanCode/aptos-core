@@ -50,6 +50,7 @@ use claims::assert_none;
 use core::panic;
 use fail::fail_point;
 use move_core_types::{value::MoveTypeLayout, vm_status::StatusCode};
+use move_vm_runtime::DummyCodeStorage;
 use num_cpus;
 use rayon::ThreadPool;
 use std::{
@@ -114,7 +115,13 @@ where
 
         // VM execution.
         let sync_view = LatestView::new(base_view, ViewState::Sync(parallel_state), idx_to_execute);
-        let execute_result = executor.execute_transaction(&sync_view, txn, idx_to_execute);
+        let execute_result = executor.execute_transaction(
+            &sync_view,
+            &sync_view,
+            &DummyCodeStorage,
+            txn,
+            idx_to_execute,
+        );
 
         let mut prev_modified_keys = last_input_output
             .modified_keys(idx_to_execute)
@@ -1066,7 +1073,13 @@ where
                 ViewState::Unsync(SequentialState::new(&unsync_map, start_counter, &counter)),
                 idx as TxnIndex,
             );
-            let res = executor.execute_transaction(&latest_view, txn, idx as TxnIndex);
+            let res = executor.execute_transaction(
+                &latest_view,
+                &latest_view,
+                &DummyCodeStorage,
+                txn,
+                idx as TxnIndex,
+            );
             let must_skip = matches!(res, ExecutionStatus::SkipRest(_));
             match res {
                 ExecutionStatus::Abort(err) => {

@@ -14,7 +14,12 @@ use aptos_types::{
     transaction::BlockExecutableTransaction as Transaction,
     write_set::WriteOp,
 };
-use aptos_vm_types::resolver::{TExecutorView, TResourceGroupView};
+use aptos_vm_types::{
+    module_and_script_storage::{
+        module_storage::AptosModuleStorage, script_storage::AptosScriptStorage,
+    },
+    resolver::{TExecutorView, TResourceGroupView},
+};
 use move_core_types::{value::MoveTypeLayout, vm_status::StatusCode};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -83,6 +88,8 @@ pub trait ExecutorTask: Sync {
             ResourceTag = <Self::Txn as Transaction>::Tag,
             Layout = MoveTypeLayout,
         >),
+        module_storage: &impl AptosModuleStorage,
+        script_storage: &impl AptosScriptStorage,
         txn: &Self::Txn,
         txn_idx: TxnIndex,
     ) -> ExecutionStatus<Self::Output, Self::Error>;

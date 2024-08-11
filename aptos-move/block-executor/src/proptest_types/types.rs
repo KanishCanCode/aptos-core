@@ -25,7 +25,12 @@ use aptos_types::{
     transaction::BlockExecutableTransaction as Transaction,
     write_set::{TransactionWrite, WriteOp, WriteOpKind},
 };
-use aptos_vm_types::resolver::{TExecutorView, TResourceGroupView};
+use aptos_vm_types::{
+    module_and_script_storage::{
+        module_storage::AptosModuleStorage, script_storage::AptosScriptStorage,
+    },
+    resolver::{TExecutorView, TResourceGroupView},
+};
 use bytes::Bytes;
 use claims::{assert_ge, assert_le, assert_ok};
 use move_core_types::{identifier::IdentStr, value::MoveTypeLayout};
@@ -862,6 +867,8 @@ where
         &self,
         view: &(impl TExecutorView<K, u32, MoveTypeLayout, DelayedFieldID, ValueType>
               + TResourceGroupView<GroupKey = K, ResourceTag = u32, Layout = MoveTypeLayout>),
+        _module_storage: &impl AptosModuleStorage,
+        _script_storage: &impl AptosScriptStorage,
         txn: &Self::Txn,
         txn_idx: TxnIndex,
     ) -> ExecutionStatus<Self::Output, Self::Error> {
