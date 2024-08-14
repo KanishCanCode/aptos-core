@@ -188,6 +188,11 @@ struct K8sSwarm {
     keep: bool,
     #[clap(long, help = "If set, enables HAProxy for each of the validators")]
     enable_haproxy: bool,
+    #[clap(
+        long,
+        help = "Retain logs for all nodes instead of just the first 5 nodes"
+    )]
+    retain_all_logs: bool,
 }
 
 #[derive(Parser, Debug)]

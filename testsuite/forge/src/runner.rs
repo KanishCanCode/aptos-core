@@ -75,6 +75,9 @@ pub struct Options {
     /// NO-OP: unsupported option, exists for compatibility with the default test harness
     /// Show captured stdout of successful tests
     show_output: bool,
+    /// Retain logs for all nodes instead of just the first 5 nodes
+    #[clap(long, default_value = "false", env = "FORGE_RETAIN_ALL_LOGS")]
+    retain_all_logs: bool,
 }
 
 impl Options {
@@ -167,6 +170,9 @@ pub struct ForgeConfig {
     validator_resource_override: NodeResourceOverride,
 
     fullnode_resource_override: NodeResourceOverride,
+
+    /// Retain logs for all nodes instead of just the first 5 nodes
+    retain_all_logs: bool,
 }
 
 impl ForgeConfig {
@@ -257,7 +263,7 @@ impl ForgeConfig {
         OverrideNodeConfig::new(override_config, base_config)
     }
 
-    pub fn build_node_helm_config_fn(&self) -> Option<NodeConfigFn> {
+    pub fn build_node_helm_config_fn(&self, retain_all_logs: bool) -> Option<NodeConfigFn> {
         let validator_override_node_config = self
             .validator_override_node_config_fn
             .clone()
@@ -322,6 +328,13 @@ impl ForgeConfig {
             }
             if let Some(storage_gib) = fullnode_resource_override.storage_gib {
                 helm_values["fullnode"]["storage"]["size"] = format!("{}Gi", storage_gib).into();
+            }
+
+            if retain_all_logs {
+                helm_values["validator"]["podAnnotations"]["aptos.dev/log-levels"] =
+                    serde_yaml::Value::String("warn,info,error".to_owned());
+                helm_values["fullnode"]["podAnnotations"]["aptos.dev/log-levels"] =
+                    serde_yaml::Value::String("warn,info,error".to_owned());
             }
         }))
     }
@@ -484,6 +497,7 @@ impl Default for ForgeConfig {
             existing_db_tag: None,
             validator_resource_override: NodeResourceOverride::default(),
             fullnode_resource_override: NodeResourceOverride::default(),
+            retain_all_logs: false,
         }
     }
 }
@@ -539,6 +553,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
     pub fn run(&self) -> Result<TestReport> {
         let test_count = self.filter_tests(&self.tests.all_tests()).count();
         let filtered_out = test_count.saturating_sub(self.tests.all_tests().len());
+        let retain_all_logs = self.options.retain_all_logs || self.tests.retain_all_logs;
 
         let mut report = TestReport::new();
         let mut summary = TestSummary::new(test_count, filtered_out);
@@ -566,7 +581,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
                 self.tests.genesis_config.as_ref(),
                 self.global_duration + Duration::from_secs(NAMESPACE_CLEANUP_DURATION_BUFFER_SECS),
                 self.tests.genesis_helm_config_fn.clone(),
-                self.tests.build_node_helm_config_fn(),
+                self.tests.build_node_helm_config_fn(retain_all_logs),
                 self.tests.existing_db_tag.clone(),
             ))?;
 
