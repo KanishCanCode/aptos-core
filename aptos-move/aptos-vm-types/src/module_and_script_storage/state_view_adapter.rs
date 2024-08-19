@@ -1,13 +1,16 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::module_and_script_storage::{
-    module_storage::AptosModuleStorage, script_storage::AptosScriptStorage,
-    state_view_adapter::ModuleStorageEntry::Deserialized,
+use crate::{
+    module_and_script_storage::{
+        module_storage::AptosModuleStorage, script_storage::AptosScriptStorage,
+        state_view_adapter::ModuleStorageEntry::Deserialized,
+    },
+    resolver::TModuleView,
 };
 use aptos_types::{
     on_chain_config::{Features, OnChainConfig},
-    state_store::{state_key::StateKey, StateView},
+    state_store::{state_key::StateKey, state_value::StateValueMetadata, StateView},
     vm::configs::aptos_prod_deserializer_config,
 };
 use bytes::Bytes;
@@ -224,7 +227,16 @@ impl<'s, S: StateView> ModuleStorage for AptosCodeStorageAdapter<'s, S> {
     }
 }
 
-impl<'s, S: StateView> AptosModuleStorage for AptosCodeStorageAdapter<'s, S> {}
+impl<'s, S: StateView> AptosModuleStorage for AptosCodeStorageAdapter<'s, S> {
+    fn fetch_state_value_metadata(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> PartialVMResult<Option<StateValueMetadata>> {
+        let state_key = StateKey::module(address, module_name);
+        self.state_view.get_module_state_value_metadata(&state_key)
+    }
+}
 
 impl<'s, S: StateView> ScriptStorage for AptosCodeStorageAdapter<'s, S> {
     fn fetch_deserialized_script(
