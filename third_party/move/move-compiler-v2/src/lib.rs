@@ -279,17 +279,6 @@ pub fn check_and_rewrite_pipeline<'a, 'b>(
 ) -> EnvProcessorPipeline<'b> {
     let mut env_pipeline = EnvProcessorPipeline::<'b>::default();
 
-    if !for_v1_model && options.experiment_on(Experiment::USAGE_CHECK) {
-        env_pipeline.add(
-            "unused checks",
-            flow_insensitive_checkers::check_for_unused_vars_and_params,
-        );
-        env_pipeline.add(
-            "type parameter check",
-            function_checker::check_for_function_typed_parameters,
-        );
-    }
-
     if !for_v1_model && options.experiment_on(Experiment::RECURSIVE_TYPE_CHECK) {
         env_pipeline.add("check recursive struct definition", |env| {
             recursive_struct_checker::check_recursive_struct(env)
@@ -312,19 +301,6 @@ pub fn check_and_rewrite_pipeline<'a, 'b>(
         );
     }
 
-    let check_seqs_in_binops = !options
-        .language_version
-        .unwrap_or_default()
-        .is_at_least(LanguageVersion::V2_0)
-        && options.experiment_on(Experiment::SEQS_IN_BINOPS_CHECK);
-
-    if !for_v1_model && check_seqs_in_binops {
-        env_pipeline.add("binop side effect check", |env| {
-            // This check should be done before inlining.
-            seqs_in_binop_checker::checker(env)
-        });
-    }
-
     if options.experiment_on(Experiment::INLINING) {
         let keep_inline_funs = options.experiment_on(Experiment::KEEP_INLINE_FUNS);
         env_pipeline.add("inlining", {
@@ -337,6 +313,30 @@ pub fn check_and_rewrite_pipeline<'a, 'b>(
             "access and use check after inlining",
             |env: &mut GlobalEnv| function_checker::check_access_and_use(env, false),
         );
+    }
+
+    if !for_v1_model && options.experiment_on(Experiment::USAGE_CHECK) {
+        env_pipeline.add(
+            "unused checks",
+            flow_insensitive_checkers::check_for_unused_vars_and_params,
+        );
+        env_pipeline.add(
+            "type parameter check",
+            function_checker::check_for_function_typed_parameters,
+        );
+    }
+
+    let check_seqs_in_binops = !options
+        .language_version
+        .unwrap_or_default()
+        .is_at_least(LanguageVersion::V2_0)
+        && options.experiment_on(Experiment::SEQS_IN_BINOPS_CHECK);
+
+    if !for_v1_model && check_seqs_in_binops {
+        env_pipeline.add("binop side effect check", |env| {
+            // This check should be done before inlining.
+            seqs_in_binop_checker::checker(env)
+        });
     }
 
     if !for_v1_model && options.experiment_on(Experiment::ACQUIRES_CHECK) {
