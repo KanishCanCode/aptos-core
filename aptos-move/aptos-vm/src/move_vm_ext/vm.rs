@@ -88,6 +88,7 @@ impl GenesisMoveVM {
     }
 }
 
+#[derive(Clone)]
 pub struct MoveVmExt {
     inner: MoveVM,
     pub(crate) env: Arc<Environment>,
