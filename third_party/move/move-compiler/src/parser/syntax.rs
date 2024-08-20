@@ -28,6 +28,10 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     }
 }
 
+// Internal complier variables used to represent `for` loops.
+pub const FOR_LOOP_UPDATE_ITER_FLAG: &str = "__update_iter_flag";
+const FOR_LOOP_UPPER_BOUND_VALUE: &str = "__upper_bound_value";
+
 //**************************************************************************************************
 // Error Handling
 //**************************************************************************************************
@@ -759,8 +763,8 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
 // Parse a binding:
 //      Bind =
 //          <Var>
-//          | <NameAccessChain> <OptionalTypeArgs> "{" Comma<BindField> "}"
-//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Bind> "," ")"
+//          | <NameAccessChain> <OptionalTypeArgs> "{" Comma<BindFieldOrDotDot> "}"
+//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<BindOrDotDot> "," ")"
 //          | <NameAccessChain> <OptionalTypeArgs>
 fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
@@ -787,7 +791,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LBrace,
             Tok::RBrace,
-            parse_bind_field,
+            parse_bind_field_or_dotdot,
             "a field binding",
         )?;
         Bind_::Unpack(Box::new(ty), ty_args, args)
@@ -797,7 +801,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
-            parse_bind,
+            parse_bind_or_dotdot,
             "a positional field binding",
         )?;
         let end_loc = context.tokens.previous_end_loc();
@@ -838,6 +842,34 @@ fn parse_bind_list(context: &mut Context) -> Result<BindList, Box<Diagnostic>> {
     };
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, b))
+}
+
+/// Parse a <BindField> or a ".."
+/// <BindFieldOrDotDot> = <BindField> | ".."
+fn parse_bind_field_or_dotdot(context: &mut Context) -> Result<BindFieldOrDotDot, Box<Diagnostic>> {
+    if context.tokens.peek() == Tok::PeriodPeriod {
+        let loc = current_token_loc(context.tokens);
+        require_move_2(context, loc, "`..` patterns");
+        context.tokens.advance()?;
+        Ok(sp(loc, BindFieldOrDotDot_::DotDot))
+    } else {
+        let (f, b) = parse_bind_field(context)?;
+        Ok(sp(f.loc(), BindFieldOrDotDot_::FieldBind(f, b)))
+    }
+}
+
+/// Parse a <Bind> or a ".."
+/// <BindOrDotDot> = <Bind> | ".."
+fn parse_bind_or_dotdot(context: &mut Context) -> Result<BindOrDotDot, Box<Diagnostic>> {
+    if context.tokens.peek() == Tok::PeriodPeriod {
+        let loc = current_token_loc(context.tokens);
+        require_move_2(context, loc, "`..` patterns");
+        context.tokens.advance()?;
+        Ok(sp(loc, BindOrDotDot_::DotDot))
+    } else {
+        let b = parse_bind(context)?;
+        Ok(sp(b.loc, BindOrDotDot_::Bind(b)))
+    }
 }
 
 // Parse a list of bindings for lambda.
@@ -1412,7 +1444,7 @@ fn parse_for_loop(context: &mut Context) -> Result<(Exp, bool), Box<Diagnostic>>
     );
 
     // To create the declaration "let flag = false", first create the variable flag, and then assign it to false
-    let flag_symb = Symbol::from("__update_iter_flag");
+    let flag_symb = Symbol::from(FOR_LOOP_UPDATE_ITER_FLAG);
     let flag = sp(for_loc, vec![sp(
         for_loc,
         Bind_::Var(Var(sp(for_loc, flag_symb))),
@@ -1425,7 +1457,7 @@ fn parse_for_loop(context: &mut Context) -> Result<(Exp, bool), Box<Diagnostic>>
 
     // To create the declaration "let ub_value = upper_bound", first create the variable flag, and
     // then assign it to upper_bound
-    let ub_value_symbol = Symbol::from("__upper_bound_value");
+    let ub_value_symbol = Symbol::from(FOR_LOOP_UPPER_BOUND_VALUE);
     let ub_value_bindlist = sp(for_loc, vec![sp(
         for_loc,
         Bind_::Var(Var(sp(for_loc, ub_value_symbol))),
