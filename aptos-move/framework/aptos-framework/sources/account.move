@@ -257,12 +257,12 @@ module aptos_framework::account {
 
     #[view]
     public fun exists_at(addr: address): bool {
-        exists<Account>(addr) || features::lite_account_enabled()
+        !features::default_to_lite_account_enabled() && exists<Account>(addr) || features::lite_account_enabled()
     }
 
     #[view]
-    public fun account_resource_exists_at(addr: address): bool {
-        resource_exists_at(addr)
+    public(friend) fun account_resource_exists_at(addr: address): bool {
+        !features::default_to_lite_account_enabled() && resource_exists_at(addr)
     }
 
     inline fun resource_exists_at(addr: address): bool {
