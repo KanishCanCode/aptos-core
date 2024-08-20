@@ -697,8 +697,11 @@ impl Scheduler {
         }
     }
 
-    // TODO: comment, explain output convension: None -> lost.
-    // Some(true) -> won, no need to validate. Some(false) -> won, need to validate
+    // If no validation function is provided, the caller is doing backup execution.
+    // None: worker lost the try, i.e. some other worker won the right to perform the writing phase.
+    // Some(bool): worker won. true means backup, or winning vs backup after a successful validation,
+    // so no further validation of this output is necessary. false means validation is necessary,
+    // this happens when backup is not observed.
     pub(crate) fn try_set_execution_flag_writing<F>(
         &self,
         txn_idx: TxnIndex,
