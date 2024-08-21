@@ -7,21 +7,21 @@ spec std::acl {
         exists a in acl.list: a == addr
     }
 
-    spec contains(acl: &ACL, addr: address): bool {
-        ensures result == spec_contains(acl, addr);
+    spec contains(self: &ACL, addr: address): bool {
+        ensures result == spec_contains(self, addr);
     }
 
-    spec add(acl: &mut ACL, addr: address) {
-        aborts_if spec_contains(acl, addr) with error::INVALID_ARGUMENT;
-        ensures spec_contains(acl, addr);
+    spec add(self: &mut ACL, addr: address) {
+        aborts_if spec_contains(self, addr) with error::INVALID_ARGUMENT;
+        ensures spec_contains(self, addr);
     }
 
-    spec remove(acl: &mut ACL, addr: address) {
-        aborts_if !spec_contains(acl, addr) with error::INVALID_ARGUMENT;
-        ensures !spec_contains(acl, addr);
+    spec remove(self: &mut ACL, addr: address) {
+        aborts_if !spec_contains(self, addr) with error::INVALID_ARGUMENT;
+        ensures !spec_contains(self, addr);
     }
 
-    spec assert_contains(acl: &ACL, addr: address) {
-        aborts_if !spec_contains(acl, addr) with error::INVALID_ARGUMENT;
+    spec assert_contains(self: &ACL, addr: address) {
+        aborts_if !spec_contains(self, addr) with error::INVALID_ARGUMENT;
     }
 }
