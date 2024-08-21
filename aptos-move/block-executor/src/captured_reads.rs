@@ -555,6 +555,10 @@ impl<T: Transaction> CapturedReads<T> {
         idx_to_validate: TxnIndex,
     ) -> bool {
         if self.speculative_failure {
+            println!(
+                "speculative failure error inside data reads, txn={}",
+                idx_to_validate
+            );
             return false;
         }
 

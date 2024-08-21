@@ -147,6 +147,13 @@ where
                         && read_set.validate_data_reads(versioned_cache.data(), idx_to_execute)
                         && read_set
                             .validate_group_reads(versioned_cache.group_data(), idx_to_execute)
+                        && matches!(
+                            read_set.validate_delayed_field_reads(
+                                versioned_cache.delayed_fields(),
+                                idx_to_execute
+                            ),
+                            Ok(true)
+                        )
                 })
             };
 
@@ -163,6 +170,11 @@ where
                 return Ok(None);
             };
         }
+
+        println!(
+            "won writing rights, txn={}, is_backup_valiadted={}, called_after_commit={}",
+            idx_to_execute, is_backup_validated, called_after_commit
+        );
 
         let mut prev_modified_keys = last_input_output
             .modified_keys(idx_to_execute)
@@ -383,6 +395,8 @@ where
         versioned_cache: &MVHashMap<T::Key, T::Tag, T::Value, T::Identifier>,
     ) -> Result<bool, PanicError> {
         let _timer = TASK_VALIDATE_SECONDS.start_timer();
+        println!("called validation on transaction={}", idx_to_validate);
+
         let recorded_input = last_input_output
             .recorded_input(idx_to_validate)
             .expect("[BlockSTM]: Prior read-set must be recorded");
@@ -394,6 +408,7 @@ where
             // validation may fail due to delayed fields incorrect use (TODO: audit and fix).
             // But for backup execution, there is no need to abort, as the rolling commit
             // will re-execute the transaction in the correct setting.
+            println!("was already validated, txn={}", idx_to_validate);
             return Ok(true);
         }
 
@@ -502,7 +517,12 @@ where
         let read_set = &recorded_input.input;
         let mut execution_still_valid =
             read_set.validate_delayed_field_reads(versioned_cache.delayed_fields(), txn_idx)?;
-
+        if !execution_still_valid {
+            println!(
+                "failed delayed fields during commit/after execution, txn={}",
+                txn_idx
+            );
+        }
         if execution_still_valid {
             if let Some(delayed_field_ids) = last_input_output.delayed_field_keys(txn_idx) {
                 if let Err(e) = versioned_cache
@@ -562,6 +582,13 @@ where
                 last_input_output,
             )? {
                 // Transaction needs to be re-executed, one final time.
+                /*let recorded_input = last_input_output
+                    .recorded_input(txn_idx)
+                    .expect("[BlockSTM]: Prior read-set must be recorded");
+
+                if recorded_input.as_ref().is_backup_validated {
+                    panic!("still failed ha?");
+                }*/
                 Self::update_transaction_on_abort(txn_idx, last_input_output, versioned_cache);
                 // We are going to skip reducing validation index here, as we
                 // are executing immediately, and will reduce it unconditionally
@@ -592,6 +619,9 @@ where
 
                 let validation_result =
                     Self::validate(txn_idx, last_input_output, versioned_cache)?;
+                if !validation_result {
+                    println!("failed read set validation, txn={}", txn_idx);
+                }
                 if !validation_result
                     || !Self::validate_and_commit_delayed_fields(
                         txn_idx,
@@ -600,6 +630,7 @@ where
                     )
                     .unwrap_or(false)
                 {
+                    println!("failed final validations, txn={}", txn_idx);
                     return Err(code_invariant_error(format!(
                         "Validation after re-execution failed for {} txn, validate() = {}",
                         txn_idx, validation_result
@@ -934,14 +965,14 @@ where
                     scheduler.queueing_commits_mark_done();
                 }
                 if enable_special_committers
-		    // Backup execution might resume some executions and liveness may depend
-                    // on the current worker picking up the highest priority task that might
-                    // be the newly awaken txn. If the current worker had previously picked
-                    // an execution task, it might suspend on resumed txn and lead to deadlock.
-                    && !matches!(
-                        scheduler_task,
-                        SchedulerTask::ExecutionTask(_, _, ExecutionTaskType::Execution)
-                    )
+                // Backup execution might resume some executions and liveness may depend
+                        // on the current worker picking up the highest priority task that might
+                        // be the newly awaken txn. If the current worker had previously picked
+                        // an execution task, it might suspend on resumed txn and lead to deadlock.
+                        && !matches!(
+                            scheduler_task,
+                            SchedulerTask::ExecutionTask(_, _, ExecutionTaskType::Execution)
+                        )
                 {
                     if let Some(last_commit_idx) = last_commit_idx {
                         let next_commit_idx = last_commit_idx + 1;
@@ -996,6 +1027,7 @@ where
             scheduler_task = match scheduler_task {
                 SchedulerTask::ValidationTask(txn_idx, incarnation, wave) => {
                     let valid = Self::validate(txn_idx, last_input_output, versioned_cache)?;
+                    println!("validation result, txn={}, outcome={}", txn_idx, valid);
                     Self::update_on_validation(
                         txn_idx,
                         incarnation,

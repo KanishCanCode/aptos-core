@@ -720,6 +720,7 @@ impl Scheduler {
                     ExecutionStatus::Executing(incarnation, _, ref mut flag)
                     | ExecutionStatus::ReadyToWakeUp(incarnation, _, ref mut flag) => match flag {
                         ExecutingFlag::Main => {
+                            println!("won with no contest, txn={}", txn_idx);
                             *flag = ExecutingFlag::Writing;
                             Some(false)
                         },
@@ -1083,6 +1084,7 @@ impl Scheduler {
             },
             ExecutionStatus::ReadyToExecute(incarnation) => {
                 let ret: (u32, ExecutionTaskType) = (*incarnation, ExecutionTaskType::Execution);
+                println!("set to main inside incarnate, txn={}", txn_idx);
                 *status = ExecutionStatus::Executing(
                     *incarnation,
                     ExecutionTaskType::Execution,
@@ -1224,6 +1226,7 @@ impl Scheduler {
         let mut status = self.txn_status[txn_idx as usize].0.write();
         match &*status {
             ExecutionStatus::Suspended(incarnation, dep_condvar) => {
+                println!("set to main inside resume, txn={}", txn_idx);
                 *status = ExecutionStatus::ReadyToWakeUp(
                     *incarnation,
                     dep_condvar.clone(),
